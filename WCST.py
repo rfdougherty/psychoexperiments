@@ -1,18 +1,18 @@
 import numpy as np
 from psychopy import visual,core,monitors,event,gui
-"""
-Instruction: Select one of the four cards displayed at the top of the screen
-    such that the selected card matches the card displayed at the bottom
-    of the screen. The cards can be matched based on three dimensions - color,
-    number of objects or the shape of the objects they display. You will be
-    given feedback whether the selected card was 'Right' or 'Wrong'.
-    Use the feedback to determine which dimension is targeted by feedback and
-    based on it select the right card. The targeted dimension may change from
-    to time without notice.
+import os
+import time
 
-"""
+INSTRUCTIONS = ('Select one of the four cards displayed at the top of the screen such '
+                              +'that the selected card matches the card displayed at the bottom of the screen. '
+                              +'The cards can be matched based on three dimensions - color, number of objects '
+                              +'or the shape of the objects they display. You will be given feedback whether the '
+                              +'selected card was RIGHT or WRONG. Use the feedback to determine which '
+                              +'dimension is targeted by feedback and based on it select the right card. The '
+                              +'targeted dimension may change from to time without notice.\n\nPress any key to begin')
 
-X=0;Y=1
+X = 0
+Y = 1
 def pointInTriangle(t1,t2,t3,pt):
     """ determines whether point PT is located inside
         triangle with vertices at points T1, T2 and T3
@@ -67,10 +67,13 @@ STAR=np.ones((N,N))*-1
 STAR=drawStar(STAR,(mid,mid),5,N/2,N/5)
 SQUARE=np.ones((N,N))
 
+SZ = (1280,1024)
+
 # Settings
-MON=monitors.Monitor('dell', width=37.8, distance=50); MON.setSizePix((1280,1024))
-TPOS=(0,-10)# position of the target card 
-CARDY=10# vertical position of choice cards
+MON=monitors.Monitor('dell', width=37.8, distance=50); MON.setSizePix(SZ)
+TPOS=(0,-9)# position of the target card
+FPOS=(0,3.8)# position of the feedback
+CARDY=9# vertical position of choice cards
 CARDX=1 # horizontal space between choice cards
 CARDW=4 # card width
 CARDH=6 # card height
@@ -84,30 +87,31 @@ SPOS = [[[0,0],[np.nan,np.nan],[np.nan,np.nan],[np.nan,np.nan]],
 
 class Experiment():
     def __init__(self):
-        myDlg = gui.Dlg(title="Wisconsin Card Sorting Task",pos=(0,0))     
+        myDlg = gui.Dlg(title="Wisconsin Card Sorting Task",pos=(SZ[0]/2,SZ[1]/2))
         myDlg.addField('Subject ID:',1)
-        myDlg.addField('Number of Trials:',128)
+        #myDlg.addField('Number of Trials:',128)
         myDlg.show()#show dialog and wait for OK or Cancel
         vpInfo = myDlg.data
-        self.vp=vpInfo[0]
-        self.T=vpInfo[1]
-
-        self.win=visual.Window(size=(1000,1000),units='deg',fullscr=False,monitor=MON)
-        self.mouse = event.Mouse(False,None,self.win)        
-        self.cards=[]
-        self.elems=[]
+        self.vp = vpInfo[0]
+        self.win = visual.Window(size=SZ,units='deg',fullscr=True,monitor=MON)
+        self.mouse = event.Mouse(False,None,self.win)
+        self.cards = []
+        self.elems = []
         for i in range(4):
             self.cards.append(visual.Rect(self.win,CARDW,CARDH,fillColor='white',
-                        pos=((i-1.5)*(CARDX+CARDW),CARDY),lineColor='black',interpolate=False))
+                        pos = ((i-1.5)*(CARDX+CARDW),CARDY),lineColor='black',interpolate=False))
             self.elems.append(visual.ElementArrayStim(self.win,nElements=4,sizes=1.5,colors='black',
-                         fieldPos=((i-1.5)*(CARDX+CARDW),CARDY),elementTex=None))
+                         fieldPos = ((i-1.5)*(CARDX+CARDW),CARDY),elementTex=None))
         self.cards.append(visual.Rect(self.win,CARDW,CARDH,fillColor='white',
-            pos=TPOS,lineColor='black',interpolate=False))  
+            pos = TPOS,lineColor='black',interpolate=False))
         self.elems.append(visual.ElementArrayStim(self.win,nElements=4,sizes=1.5,colors='black',
-            fieldPos=TPOS,elementTex=None))
-        self.text=visual.TextStim(self.win,pos=TPOS,height=2)
-        self.output=open('vp%03d.res'%self.vp,'w')
-    
+            fieldPos = TPOS,elementTex=None))
+        self.text = visual.TextStim(self.win,pos=FPOS,height=2)
+        if not os.path.exists('data'):
+            os.makedirs('data')
+        fname = os.path.join('data', 'wcst_s%03d_%s.csv' % (self.vp, time.strftime("%Y%m%d-%H%M%S")))
+        self.output = open(fname, 'w')
+
     def runTrial(self,t):
         choice=[]
         for i in range(3):
@@ -119,25 +123,26 @@ class Experiment():
             self.cards[i].draw()
             self.elems[i].setColors(CLRS[choice[i][0]])
             self.elems[i].setMask(SHAPES[choice[i][1]])
-            self.elems[i].setXYs(SPOS[choice[i][2]]) 
+            self.elems[i].setXYs(SPOS[choice[i][2]])
             self.elems[i].draw()
         self.cards[4].setPos(TPOS)
         self.cards[4].draw()
         self.elems[4].setFieldPos(TPOS)
         self.elems[4].setColors(CLRS[target[0]])
         self.elems[4].setMask(SHAPES[target[1]])
-        self.elems[4].setXYs(SPOS[target[2]]) 
+        self.elems[4].setXYs(SPOS[target[2]])
         self.elems[4].draw()
         self.win.flip()
         # wait for response
         self.mouse.clickReset()
         while True:
-            mkey=self.mouse.getPressed()
+            mkey,mtime = self.mouse.getPressed(getTime=True)
             if sum(mkey)>0:
-                card=-1;mpos=self.mouse.getPos()
+                card = -1
+                mpos = self.mouse.getPos()
                 for i in range(4):
                     if self.cards[i].contains(mpos):
-                        card=i
+                        card = i
                 if card>-1: break
                 else: self.mouse.clickReset()
             for key in event.getKeys():
@@ -145,15 +150,15 @@ class Experiment():
                     self.win.close()
                     core.quit()
         # display choice
-        self.cards[4].setPos((self.cards[card].pos[X],0)) 
-        self.elems[4].setFieldPos((self.cards[card].pos[X],0))
+        self.cards[4].setPos((self.cards[card].pos[X],-1))
+        self.elems[4].setFieldPos((self.cards[card].pos[X],-1))
         for i in range(5):
             self.cards[i].draw()
             self.elems[i].draw()
         self.win.flip()
         core.wait(1)
         # write self.output and display feedback
-        self.output.write('%d\t%d\t%d\t%d\t'%(self.vp,t,card,self.rule))
+        self.output.write('%d\t%d\t%d\t%d\t%0.3f\t' % (self.vp, t, card, self.rule, mtime[0]))
         if target[self.rule]==choice[card][self.rule]:
             self.text.setText('RIGHT')
             self.corstreak+=1
@@ -162,7 +167,7 @@ class Experiment():
             self.text.setText('WRONG')
             self.corstreak=0
             self.output.write('0\t')
-            
+
         for i in range(5):
             self.cards[i].draw()
             self.elems[i].draw()
@@ -172,18 +177,38 @@ class Experiment():
         self.text.draw()
         self.win.flip()
         core.wait(2)
-    def run(self):
+
+    def run(self, num_trials, rule_delta=10):
         self.rule=np.random.randint(3)
         self.corstreak=0
-        for t in range(self.T):
-            if self.corstreak>=10:
+        for t in range(num_trials):
+            if self.corstreak>=rule_delta:
                 sel=range(3)
                 sel.remove(self.rule)
                 self.rule=sel[np.random.randint(2)]
             self.runTrial(t)
-        self.output.close()
-        self.win.close()
+
+    def instruct(self, inst_text, go_text):
+        inst = visual.TextStim(self.win, pos=(0,0), height=1, alignHoriz='center', wrapWidth=22)
+        inst.setText(inst_text)
+        inst.draw()
+        self.win.flip()
+        event.waitKeys(maxWait=10)
+        inst.setText(go_text)
+        inst.draw()
+        self.win.flip()
+        core.wait(2)
+        inst.setText('')
+        inst.draw()
+        self.win.flip()
+        core.wait(1)
 
 if __name__ == '__main__':
-    E=Experiment()
-    E.run()
+    E = Experiment()
+    E.instruct(INSTRUCTIONS+' practice.', 'Starting the practice...')
+    E.run(num_trials=20, rule_delta=5)
+    E.instruct('Remember: '+INSTRUCTIONS+' the test', 'Starting the test...')
+    E.run(num_trials=128, rule_delta=10)
+    E.output.close()
+    E.win.close()
+
